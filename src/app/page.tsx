@@ -58,9 +58,17 @@ const factoryData = rawData as Site[];
 
 // Styles par état des machines
 const STATUS_STYLES: Record<string, string> = {
-  Actif: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
-  "En maintenance": "bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300",
-  "Hors service": "bg-rose-100 text-rose-900 dark:bg-rose-500/15 dark:text-rose-300",
+  Actif:
+    "bg-emerald-200 text-emerald-800 ring-1 ring-emerald-300 " +
+    "dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-400/30",
+
+  "En maintenance":
+    "bg-amber-200 text-amber-900 ring-1 ring-amber-300 " +
+    "dark:bg-amber-500/20 dark:text-amber-200 dark:ring-amber-400/30",
+
+  "Hors service":
+    "bg-rose-300 text-rose-900 ring-1 ring-rose-300 " +
+    "dark:bg-rose-500/20 dark:text-rose-200 dark:ring-rose-400/30",
 };
 
 const statusBadge = (etat?: string) => STATUS_STYLES[etat ?? ""] ?? "bg-muted text-foreground";
@@ -243,7 +251,7 @@ export default function FactoryDashboard() {
                           <div className="hidden md:block">
                             <div className={"overflow-hidden " + FRAME}>
                               <table className="w-full text-sm">
-                                <thead className="bg-muted/50 text-muted-foreground">
+                                <thead className="bg-muted text-muted-foreground">
                                   <tr>
                                     <th className="px-3 py-2 text-left font-medium">Machine</th>
                                     <th className="px-3 py-2 text-left font-medium">ID</th>
