@@ -37,6 +37,10 @@ import {
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import { Gauge } from "@/components/charts/Gauge";
+import { MiniBar } from "@/components/charts/MiniBar";
+import { CategoryBar } from "@/components/charts/CategoryBar";
+import random from 'random';   
 
 // Présets visuels pour avoir un style cohérent (cartes, cadres, fonds)
 const PANEL = "rounded-xl bg-background ring-1 ring-border shadow-sm";
@@ -220,121 +224,169 @@ export default function FactoryDashboard() {
       {/* Sites + départements + machines */}
       <main className="mx-auto max-w-7xl px-6 pb-12">
         <Accordion type="single" collapsible className="space-y-3">
-          {factoryData.map((site) => (
-            <AccordionItem key={site.id} value={`site-${site.id}`} className={PANEL}>
-              <AccordionTrigger className="px-4 py-3 text-left">
-                <div className="flex w-full items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-semibold leading-tight">{site.nom}</p>
-                    <p className="truncate text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {site.localisation}</p>
-                  </div>
-                  <div className="hidden items-center gap-2 sm:flex">
-                    <Badge variant="secondary" className="rounded-full">{site.departements.length} départements</Badge>
-                  </div>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="px-4 pb-4">
-                {/* Vue site : carte + départements */}
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-                  <div className="md:col-span-2">
-                    <SiteMapCard address={site.localisation} />
-                  </div>
-                  <div className="md:col-span-3 space-y-4">
-                    {site.departements.map((dep) => (
-                      <Card key={dep.id} className={PANEL}>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                          <CardTitle className="text-sm font-semibold">{dep.nom}</CardTitle>
-                          <Badge variant="outline" className="rounded-full"> {dep.machines.length} machines</Badge>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          {/* Table responsive */}
-                          <div className="hidden md:block">
-                            <div className={"overflow-hidden " + FRAME}>
-                              <table className="w-full text-sm">
-                                <thead className="bg-muted text-muted-foreground">
-                                  <tr>
-                                    <th className="px-3 py-2 text-left font-medium">Machine</th>
-                                    <th className="px-3 py-2 text-left font-medium">ID</th>
-                                    <th className="px-3 py-2 text-left font-medium">État</th>
-                                    <th className="px-3 py-2 text-left font-medium">Performance</th>
-                                    <th className="px-3 py-2 text-left font-medium">Uptime</th>
-                                    <th className="px-3 py-2 text-left font-medium">Actions</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border bg-background">
-                                  {filterMachines(dep.machines).map((m) => {
-                                    const rng = makeRng(m.id);
-                                    const perf = 70 + Math.round(rng() * 30); // 70–100
-                                    const uptime = 90 + Math.round(rng() * 10); // 90–100
-                                    return (
-                                      <tr key={m.id} className="align-middle">
-                                        <td className="px-3 py-2">{m.nom}</td>
-                                        <td className="px-3 py-2 tabular-nums text-muted-foreground">{m.id}</td>
-                                        <td className="px-3 py-2">
-                                          <Badge className={`rounded-full ${statusBadge(m.etat)}`}>{m.etat}</Badge>
-                                        </td>
-                                        <td className="px-3 py-2 w-[220px]">
-                                          <div className="flex items-center gap-2">
-                                            <Progress value={perf} className="h-2" aria-label={`Performance ${perf}%`} />
-                                            <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">{perf}%</span>
-                                          </div>
-                                        </td>
-                                        <td className="px-3 py-2 w-[140px] tabular-nums">{uptime}%</td>
-                                        <td className="px-3 py-2">
-                                          <MachineDialog m={m} onOpen={() => setSelected(m)} />
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
+  {factoryData.map((site) => (
+    <AccordionItem
+      key={site.id}
+      value={`site-${site.id}`}
+      className={PANEL}
+    >
+      {/* Niveau Site */}
+      <AccordionTrigger className="px-4 py-3 text-left">
+        <div className="flex w-full items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold leading-tight">
+              {site.nom}
+            </p>
+            <p className="truncate text-xs text-muted-foreground flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5" /> {site.localisation}
+            </p>
+          </div>
+          <div className="hidden items-center gap-2 sm:flex">
+            <Badge variant="secondary" className="rounded-full">
+              {site.departements.length} départements
+            </Badge>
+          </div>
+        </div>
+      </AccordionTrigger>
 
-                          {/* Version mobile en cartes */}
-                          <div className="grid gap-3 md:hidden">
+      <AccordionContent className="px-4 pb-4">
+        {/* Vue site : carte + départements */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+          <div className="md:col-span-2">
+            <SiteMapCard site={site} />
+          </div>
+
+          <div className="md:col-span-3 space-y-4">
+            {/* Accordion des départements */}
+            <Accordion type="multiple" collapsible className="space-y-2">
+              {site.departements.map((dep) => (
+                <AccordionItem
+                  key={dep.id}
+                  value={`dep-${dep.id}`}
+                  className={FRAME}
+                >
+                  {/* Niveau Département */}
+                  <AccordionTrigger className="px-3 py-2 text-left">
+                    <div className="flex w-full items-center justify-between gap-2">
+                      <span className="text-sm font-semibold">{dep.nom}</span>
+                      <Badge variant="outline" className="rounded-full">
+                        {dep.machines.length} machines
+                      </Badge>
+                    </div>
+                  </AccordionTrigger>
+
+                  <AccordionContent className="px-3 pb-3">
+                    {/* Machines (table + version mobile) */}
+                    <div className="hidden md:block">
+                      <div className={"overflow-hidden " + FRAME}>
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted text-muted-foreground">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium">Machine</th>
+                              <th className="px-3 py-2 text-left font-medium">ID</th>
+                              <th className="px-3 py-2 text-left font-medium">État</th>
+                              <th className="px-3 py-2 text-left font-medium">Performance</th>
+                              <th className="px-3 py-2 text-left font-medium">Uptime</th>
+                              <th className="px-3 py-2 text-left font-medium">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border bg-background">
                             {filterMachines(dep.machines).map((m) => {
-                              const rng = makeRng(m.id);
-                              const perf = 70 + Math.round(rng() * 30);
-                              const uptime = 90 + Math.round(rng() * 10);
+                              const rng = random.int(1, 9);
+                              const perf = m.performance
+                              const uptime =
+                              m.etat === "Hors service"
+                                ? 0
+                                : m.etat === "En maintenance"
+                                ? 50 + rng
+                                : 90 + rng;
                               return (
-                                <div key={m.id} className={FRAME + " p-3"}>
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                      <p className="font-medium leading-tight">{m.nom}</p>
-                                      <p className="text-xs text-muted-foreground">ID: {m.id}</p>
+                                <tr key={m.id} className="align-middle">
+                                  <td className="px-3 py-2">{m.nom}</td>
+                                  <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                                    {m.id}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <Badge className={`rounded-full ${statusBadge(m.etat)}`}>
+                                      {m.etat}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-3 py-2 w-[220px]">
+                                    <div className="flex items-center gap-2">
+                                      <Progress
+                                        value={perf}
+                                        className="h-2"
+                                        aria-label={`Performance ${perf}%`}
+                                      />
+                                      <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">
+                                        {perf}%
+                                      </span>
                                     </div>
-                                    <Badge className={`rounded-full ${statusBadge(m.etat)}`}>{m.etat}</Badge>
-                                  </div>
-                                  <div className="mt-3 grid grid-cols-2 gap-3">
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Performance</p>
-                                      <div className="mt-1 flex items-center gap-2">
-                                        <Progress value={perf} className="h-2" />
-                                        <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">{perf}%</span>
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Uptime</p>
-                                      <p className="mt-1 tabular-nums">{uptime}%</p>
-                                    </div>
-                                  </div>
-                                  <div className="mt-3">
+                                  </td>
+                                  <td className="px-3 py-2 w-[140px] tabular-nums">
+                                    {uptime}%
+                                  </td>
+                                  <td className="px-3 py-2">
                                     <MachineDialog m={m} onOpen={() => setSelected(m)} />
-                                  </div>
-                                </div>
+                                  </td>
+                                </tr>
                               );
                             })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Version mobile */}
+                    <div className="grid gap-3 md:hidden">
+                      {filterMachines(dep.machines).map((m) => {
+                        const rng = makeRng(m.id);
+                        const perf = 70 + Math.round(rng() * 30);
+                        const uptime = 90 + Math.round(rng() * 10);
+                        return (
+                          <div key={m.id} className={FRAME + " p-3"}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-medium leading-tight">{m.nom}</p>
+                                <p className="text-xs text-muted-foreground">ID: {m.id}</p>
+                              </div>
+                              <Badge className={`rounded-full ${statusBadge(m.etat)}`}>
+                                {m.etat}
+                              </Badge>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-3">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Performance</p>
+                                <div className="mt-1 flex items-center gap-2">
+                                  <Progress value={perf} className="h-2" />
+                                  <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">
+                                    {perf}%
+                                  </span>
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Uptime</p>
+                                <p className="mt-1 tabular-nums">{uptime}%</p>
+                              </div>
+                            </div>
+                            <div className="mt-3">
+                              <MachineDialog m={m} onOpen={() => setSelected(m)} />
+                            </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
+                        );
+                      })}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </div>
+      </AccordionContent>
+    </AccordionItem>
+  ))}
+</Accordion>
+
       </main>
 
       {/* Animation légère à l’apparition */}
@@ -347,161 +399,422 @@ export default function FactoryDashboard() {
 
 // ---------------------------------------------------------------------------
 // Carte Google Maps simplifiée
-function SiteMapCard({ address }: { address: string }) {
-  const { isLoaded } = useJsApiLoader({ id: "neo-factory-maps", googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "" });
+function SiteMapCard({ site }: { site: Site }) {
+  const { isLoaded } = useJsApiLoader({
+    id: "neo-factory-maps",
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
+  });
 
+  // Villes supportées (pas de géocodage côté client ici)
   const CITY_COORDS: Record<string, google.maps.LatLngLiteral> = {
     montreal: { lat: 45.5017, lng: -73.5673 },
     toronto: { lat: 43.6532, lng: -79.3832 },
+    vancouver: { lat: 49.2827, lng: -123.1207 },
+    calgary: { lat: 51.0447, lng: -114.0719 },
+    quebec: { lat: 46.8139, lng: -71.2080 },
   };
 
+  // Normalisation simple du libellé de ville → clé
   const cityKey = useMemo(() => {
-    const a = address.toLowerCase();
+    const a = site.localisation.toLowerCase();
+
     if (a.includes("montréal") || a.includes("montreal")) return "montreal";
     if (a.includes("toronto")) return "toronto";
+    if (a.includes("vancouver")) return "vancouver";
+    if (a.includes("calgary")) return "calgary";
+    if (a.includes("québec") || a.includes("quebec")) return "quebec";
+
+    // fallback
     return "toronto";
-  }, [address]);
+  }, [site.localisation]);
 
   const center = CITY_COORDS[cityKey];
+
+  // Compteurs par état pour CE site
+  const counts = useMemo(() => {
+    const all = site.departements.flatMap((d) => d.machines);
+    const acc: Record<string, number> = { Actif: 0, "En maintenance": 0, "Hors service": 0 };
+    for (const m of all) acc[m.etat] = (acc[m.etat] ?? 0) + 1;
+    return acc;
+  }, [site]);
+
+  // Joli libellé pour le titre
+  const cityLabel =
+    cityKey === "montreal" ? "Montréal" :
+    cityKey === "toronto" ? "Toronto" :
+    cityKey === "vancouver" ? "Vancouver" :
+    cityKey === "calgary" ? "Calgary" :
+    "Québec";
 
   return (
     <Card className={PANEL + " h-full"}>
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
-          <MapPin className="h-4 w-4" /> Localisation — {cityKey === "montreal" ? "Montréal" : "Toronto"}
+          <MapPin className="h-4 w-4" />
+          Localisation — {cityLabel}
         </CardTitle>
       </CardHeader>
+
       <CardContent>
         {!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">Ajoutez votre clé Google Maps dans <code>.env</code> → <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> pour afficher la carte.</p>
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            Ajoutez votre clé Google Maps dans <code>.env</code> →{" "}
+            <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> pour afficher la carte.
+          </p>
         )}
-        <div className={"mt-2 overflow-hidden " + FRAME}>
+
+        {/* NOTE: espace ajouté avant {FRAME} + classes de hauteur correctes */}
+        <div className={"mt-2 overflow-hidden " + FRAME + " h-[300px] md:h-[420px]"}>
           {isLoaded ? (
             <GoogleMap
-              mapContainerStyle={{ width: "100%", height: 260 }}
+              mapContainerStyle={{ width: "100%", height: "100%" }}
               center={center}
               zoom={11}
               options={{ disableDefaultUI: true, zoomControl: true, styles: MAP_CONTAINER_STYLE }}
             >
-              <Marker position={center} label={cityKey === "montreal" ? "Montréal" : "Toronto"} />
+              <Marker position={center} label={cityLabel} />
             </GoogleMap>
           ) : (
-            <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">Chargement de la carte…</div>
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Chargement de la carte…
+            </div>
           )}
         </div>
-        <p className="mt-2 truncate text-xs text-muted-foreground">{address}</p>
+
+        {/* Adresse brute */}
+        <p className="mt-2 truncate text-xs text-muted-foreground">{site.localisation}</p>
+
+        {/* Compteurs par état */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Badge className={`rounded-full ${statusBadge("Actif")}`}>
+            Actif&nbsp;•&nbsp;{counts["Actif"] ?? 0}
+          </Badge>
+          <Badge className={`rounded-full ${statusBadge("En maintenance")}`}>
+            En maintenance&nbsp;•&nbsp;{counts["En maintenance"] ?? 0}
+          </Badge>
+          <Badge className={`rounded-full ${statusBadge("Hors service")}`}>
+            Hors service&nbsp;•&nbsp;{counts["Hors service"] ?? 0}
+          </Badge>
+        </div>
       </CardContent>
     </Card>
   );
 }
 
+
 // ---------------------------------------------------------------------------
+// Récupère site + département + machine par ID (pour "Configuration")
+// Renvoie des champs prêts à afficher, avec "N/A" si manquant.
+function getMachineConfig(machineId: number) {
+  // Cherche le site / département / machine correspondants
+  for (const site of factoryData) {
+    for (const dep of site.departements) {
+      const m = dep.machines.find((x) => x.id === machineId);
+      if (m) {
+        return {
+          site: site.nom ?? "N/A",
+          siteLocalisation: site.localisation ?? "N/A",
+          departement: dep.nom ?? "N/A",
+          id: m.id ?? "N/A",
+          nom: m.nom ?? "N/A",
+          etat: m.etat ?? "N/A",
+          derniereMaintenance: m.derniereMaintenance ?? "N/A",
+          // Champs techniques potentiels qui n'existent pas encore → N/A
+          modele: m.modele ?? "N/A",
+          firmware: m.firmware ?? "N/A",
+          adresseIP: m.adresseIP ?? "N/A",
+          serie: m.serie ?? "N/A",
+        };
+      }
+    }
+  }
+  // Si l’ID n’existe pas (sécurité)
+  return {
+    site: "N/A",
+    siteLocalisation: "N/A",
+    departement: "N/A",
+    id: machineId ?? "N/A",
+    nom: "N/A",
+    etat: "N/A",
+    derniereMaintenance: "N/A",
+    modele: "N/A",
+    firmware: "N/A",
+    adresseIP: "N/A",
+    serie: "N/A",
+  };
+}
+
 // Fenêtre de détails machine
+// ---------------------------------------------------------------------------
+// Fenêtre de détails machine (2 vues : Rapports / Configuration)
 function MachineDialog({ m, onOpen }: { m: Machine; onOpen: () => void }) {
-  const rng = makeRng(m.id);
-  const availability = 75 + Math.round(rng() * 25); // 75–100
-  const reliability = ["CPU", "Mémoire", "Stockage"].map(() => 70 + Math.round(rng() * 30));
+  // Graine stable par machine et par jour (valeurs pseudo-réalistes mais reproductibles)
+  const daySalt = () => Math.floor(Date.now() / (24 * 3600 * 1000));
+  const seedFrom = (...parts: (string | number)[]) =>
+    [...parts.join("|")].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const seeded = (seed: number) => {
+    let s = seed >>> 0;
+    return () => {
+      s = (s * 1664525 + 1013904223) % 2 ** 32;
+      return (s >>> 0) / 2 ** 32;
+    };
+  };
+  const gaussian = (rng: () => number, mean = 0, stdev = 1) => {
+    let u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    return mean + z * stdev;
+  };
+  const pct = (x: number) => Math.max(0, Math.min(100, Math.round(x)));
+
+  const baseSeed = seedFrom(m.id, daySalt());
+  const rng = seeded(baseSeed);
+
+  // Indicateurs principaux
+  const availability = m.etat === "Hors service" ? 0 : m.etat === "En maintenance" ? pct(gaussian(rng, 55, 6)) : pct(gaussian(rng, 88, 6));
+  const quality = m.etat === "Hors service" ? 0 : m.etat === "En maintenance" ? pct(gaussian(rng, 57, 6)) : pct(gaussian(rng, 92, 6));
+  const performance = m.performance
+
+  const reliability = ["CPU", "Mémoire", "Stockage"].map((label, i) => {
+    const r = seeded(seedFrom(m.id, label, daySalt()));
+    return pct(gaussian(r, 86 - i * 2, 5));
+  });
+
+  // Séries simplifiées pour les graphiques
+const piecesParHeure =
+  m.etat === "Hors service" || m.etat === "En maintenance"
+    ? Array.from({ length: 12 }, (_, i) => ({
+        x: `${8 + i}h`,
+        y: 0,
+      }))
+    : Array.from({ length: 12 }, (_, i) => {
+        const r = seeded(seedFrom(m.id, "pph", i, daySalt()));
+        const trend = 12 + 6 * Math.sin((i / 12) * Math.PI);
+        const noise = gaussian(r, 0, 2.5);
+        return { x: `${8 + i}h`, y: Math.max(0, Math.round(trend + noise)) };
+      });
+
+
+  const causesRaw = [
+    { name: "Manque matériel", value: Math.round(8 + seeded(seedFrom(m.id, "mm", daySalt()))() * 32) },
+    { name: "Maintenance",     value: Math.round(5 + seeded(seedFrom(m.id, "mnt", daySalt()))() * 23) },
+    { name: "Setup",           value: Math.round(3 + seeded(seedFrom(m.id, "setup", daySalt()))() * 17) },
+    { name: "Pause",           value: Math.round(2 + seeded(seedFrom(m.id, "break", daySalt()))() * 10) },
+  ];
+  const causesArret = causesRaw.sort((a, b) => b.value - a.value);
+
+  // Vue active du popup
+  const [view, setView] = useState<"rapports" | "configuration">("rapports");
+
+  // Infos de configuration tirées du JSON (avec "N/A" si manquant)
+  const cfg = getMachineConfig(m.id);
 
   return (
     <Dialog>
       <DialogTrigger asChild>
         <button
-          onClick={onOpen}
+          onClick={() => {
+            onOpen();
+            setView("rapports");
+          }}
           className="inline-flex items-center rounded-md px-3 py-1 text-sm font-medium transition-colors bg-background ring-1 ring-border hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Détails
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base md:text-lg">
-            <Cog className="h-4 w-4 text-muted-foreground" />
-            {m.nom}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* Connexion */}
-          <Card className={PANEL}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Connexion</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Wifi className="h-4 w-4" />
-                Connecté • 2.4 Gbps
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`rounded-full px-2 py-0.5 text-xs ${statusBadge(m.etat)}`}>{m.etat}</span>
-                <span className="text-xs text-muted-foreground">ID: {m.id}</span>
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Disponibilité */}
-          <Card className={PANEL}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Disponibilité (24h)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <Progress value={availability} className="h-2" />
-                <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">{availability}%</span>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Largeur accrue, scroll géré à l’intérieur (en-tête/pied collants) */}
+      <DialogContent className="max-w-none sm:max-w-none w-[min(98vw,1400px)] p-0">
+        <div className="max-h-[88vh] overflow-y-auto">
+          {/* En-tête */}
+          <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-4 backdrop-blur">
+            <DialogHeader className="p-0">
+              <DialogTitle className="flex items-center justify-between gap-2 text-base md:text-lg">
+                <span className="flex items-center gap-2">
+                  <Cog className="h-4 w-4 text-muted-foreground" />
+                  {m.nom}
+                </span>
+                <Badge className={`rounded-full ${statusBadge(m.etat)}`}>{m.etat}</Badge>
+              </DialogTitle>
+            </DialogHeader>
+          </div>
 
-          {/* Performance + fiabilité */}
-          <Card className={PANEL + " md:col-span-2"}>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
-                <TrendingUp className="h-4 w-4" /> Production & Fiabilité
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <div>
-                <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Performance</span>
-                  <span className="tabular-nums">94%</span>
-                </div>
-                <Progress value={94} className="h-2" />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {["CPU", "Mémoire", "Stockage"].map((metric, i) => (
-                  <div key={metric} className={FRAME + " p-3 text-center"}>
-                    <div className="text-lg font-semibold text-primary tabular-nums">{reliability[i]}%</div>
-                    <div className="text-xs text-muted-foreground">{metric}</div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Contenu principal */}
+          <div className="grid gap-4 p-6 md:grid-cols-2">
+            {view === "rapports" ? (
+              <>
+                <Card className={PANEL}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Connexion</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Wifi className="h-4 w-4" />
+                      Connecté • 2.4 Gbps
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${statusBadge(m.etat)}`}>{m.etat}</span>
+                      <span className="text-xs text-muted-foreground">ID: {m.id}</span>
+                    </div>
+                  </CardContent>
+                </Card>
 
-          {/* Section maintenance */}
-          <Card className={PANEL + " md:col-span-2"}>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Database className="h-4 w-4" /> Maintenance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                <span>Dernière maintenance :</span>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{m.derniereMaintenance ?? "Jamais"}</span>
-              </div>
-              <div className="mt-3 flex gap-2">
-                <button className="inline-flex items-center rounded-md bg-background px-3 py-1 text-sm transition-colors ring-1 ring-border hover:bg-muted">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Configuration
-                </button>
-                <button className="inline-flex items-center rounded-md bg-primary px-3 py-1 text-sm text-primary-foreground hover:bg-primary/90">
-                  <TrendingUp className="mr-2 h-4 w-4" />
-                  Rapports
-                </button>
-              </div>
-            </CardContent>
-          </Card>
+                <Card className={PANEL}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Disponibilité</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex justify-center">
+                    <Gauge label="24h" value={availability} />
+                  </CardContent>
+                </Card>
+
+                <Card className={PANEL}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Performance</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex justify-center">
+                    <Gauge label="Taux" value={performance} />
+                  </CardContent>
+                </Card>
+
+                <Card className={PANEL}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Qualité</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex justify-center">
+                    <Gauge label="OK" value={quality} />
+                  </CardContent>
+                </Card>
+
+                <Card className={PANEL}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <TrendingUp className="h-4 w-4" /> Fiabilité
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-3 gap-2">
+                    {["CPU", "Mémoire", "Stockage"].map((metric, i) => (
+                      <div key={metric} className={FRAME + " p-3 text-center"}>
+                        <div className="text-lg font-semibold text-primary tabular-nums">{reliability[i]}%</div>
+                        <div className="text-xs text-muted-foreground">{metric}</div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card className={PANEL + " md:col-span-2"}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Pièces complétées (aujourd’hui)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <MiniBar data={piecesParHeure} />
+                  </CardContent>
+                </Card>
+
+                <Card className={PANEL + " md:col-span-2"}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Causes d’arrêt</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CategoryBar data={causesArret} />
+                  </CardContent>
+                </Card>
+
+                <Card className={PANEL + " md:col-span-2"}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Database className="h-4 w-4" /> Maintenance
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>Dernière maintenance :</span>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                        {m.derniereMaintenance ?? "N/A"}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <>
+                <Card className={PANEL}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Informations générales</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm">
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                      <InfoRow label="Site" value={cfg.site} />
+                      <InfoRow label="Localisation" value={cfg.siteLocalisation} />
+                      <InfoRow label="Département" value={cfg.departement} />
+                      <InfoRow label="Machine" value={cfg.nom} />
+                      <InfoRow label="ID" value={String(cfg.id)} />
+                      <InfoRow label="État" value={cfg.etat} />
+                      <InfoRow label="Dernière maintenance" value={cfg.derniereMaintenance} />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className={PANEL}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">Détails techniques</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm">
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                      <InfoRow label="Modèle" value={cfg.modele} />
+                      <InfoRow label="Firmware" value={cfg.firmware} />
+                      <InfoRow label="Adresse IP" value={cfg.adresseIP} />
+                      <InfoRow label="N° de série" value={cfg.serie} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+
+          {/* Pied de popup */}
+          <div className="sticky bottom-0 z-10 border-t bg-background/95 px-6 py-3 backdrop-blur">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setView("configuration")}
+                className={`inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm ring-1 transition-colors
+                  ${view === "configuration"
+                    ? "bg-primary text-primary-foreground ring-primary"
+                    : "bg-background text-foreground ring-border hover:bg-muted"}`}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Configuration
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setView("rapports")}
+                className={`inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm ring-1 transition-colors
+                  ${view === "rapports"
+                    ? "bg-primary text-primary-foreground ring-primary"
+                    : "bg-background text-foreground ring-border hover:bg-muted"}`}
+              >
+                <TrendingUp className="mr-2 h-4 w-4" />
+                Rapports
+              </button>
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+
+
+// Ligne d'info compacte (label à gauche, valeur à droite)
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-2 ring-1 ring-border">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium">{value || "N/A"}</span>
+    </div>
   );
 }
