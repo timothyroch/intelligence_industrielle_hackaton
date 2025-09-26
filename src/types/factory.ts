@@ -3,6 +3,11 @@ export interface Machine {
   nom: string;
   etat: "Actif" | "En maintenance" | "Hors service";
   derniereMaintenance?: string;
+  performance?: number;
+  modele?: string;
+  firmware?: string;
+  adresseIP?: string;
+  serie?: string;
 }
 
 export interface Departement {
