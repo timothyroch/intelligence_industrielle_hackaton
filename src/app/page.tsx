@@ -482,7 +482,6 @@ export default function FactoryDashboard() {
                   <div className="md:col-span-3 space-y-4">
                     <Accordion
                       type="multiple"
-                      collapsible
                       className="space-y-2"
                       value={openDepsBySite[site.id] ?? []}
                       onValueChange={(vals) =>
