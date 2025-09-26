@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NeoFactory — Tableau de bord opérationnel
 
-## Getting Started
+## Description du projet
 
-First, run the development server:
+NeoFactory est un **tableau de bord opérationnel** développé avec **Next.js, React et TypeScript**.
+Il permet de visualiser et gérer des sites, départements et machines avec :
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+* **Filtres dynamiques** (Ville, Département, État).
+* **Recherche intelligente avec autocomplétion**.
+* **Affichage hiérarchique** Sites → Départements → Machines.
+* **Cartes Google Maps intégrées** pour la localisation des sites.
+* **Indicateurs de performance et uptime**.
+* **Fenêtres de détails machines** avec rapports et configuration.
+* **Mode sombre/clair** géré localement.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Instructions de test
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Cloner le projet** :
 
-## Learn More
+   ```bash
+   git clone https://github.com/timothyroch/intelligence_industrielle_hackaton.git
+   cd intelligence_industrielle_hackaton
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+2. **Installer les dépendances** :
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+   ```bash
+   npm install
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. **Configurer la clé Google Maps** :
+   Crée un fichier `.env.local` à la racine avec :
 
-## Deploy on Vercel
+   ```
+   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=ta_clé_google_maps
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+4. **Lancer le serveur de développement** :
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+   ```bash
+   npm run dev
+   ```
+
+5. Ouvrir dans ton navigateur :
+   👉 [http://localhost:3000](http://localhost:3000)
+
+---
+
+## Lien de déploiement
+
+Le projet est déployé sur **Vercel** :
+👉 [https://neofactory.vercel.app](https://neofactory.vercel.app)
