@@ -299,7 +299,7 @@ export default function FactoryDashboard() {
             <Factory className="h-6 w-6 text-primary" aria-hidden="true" />
             <div>
               <h1 className="text-lg font-semibold leading-tight tracking-tight md:text-xl">NeoFactory</h1>
-              <p className="text-xs text-muted-foreground">Operational Dashboard</p>
+              <p className="text-xs text-muted-foreground">Tableau de bord opérationnel</p>
             </div>
           </div>
 
@@ -415,7 +415,6 @@ export default function FactoryDashboard() {
               title={dark ? "Mode clair" : "Mode sombre"}
             >
               {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              <span className="hidden sm:inline">{dark ? "Light" : "Dark"}</span>
             </button>
           </div>
         </div>
