@@ -130,7 +130,7 @@ export default function FactoryDashboard() {
   const filteredSites = useMemo(() => {
     return factoryData
       .filter((site) => {
-        const siteCity = (site.localisation.split(",")[0] || "").trim();
+        const siteCity = (site.localisation!.split(",")[0] || "").trim();
         return filterCity === "all" || siteCity === filterCity;
       })
       .map((site) => ({
@@ -168,7 +168,7 @@ export default function FactoryDashboard() {
             etat: m.etat,
               siteId: site.id,
               siteNom: site.nom,
-              siteLoc: site.localisation,
+              siteLoc: site.localisation ?? "",
               depId: dep.id,
               depNom: dep.nom,
               performance: m.performance,
@@ -233,7 +233,7 @@ export default function FactoryDashboard() {
     const set = new Set<string>();
     factoryData.forEach((s) => {
       // clé ville simple = premier mot avant la virgule (ex: "Montréal")
-      const city = (s.localisation.split(",")[0] || "").trim();
+      const city = (s.localisation!.split(",")[0] || "").trim();
       if (city) set.add(city);
     });
     return Array.from(set).sort();
@@ -242,7 +242,7 @@ export default function FactoryDashboard() {
   const deptOptions = useMemo(() => {
     const list = new Set<string>();
     factoryData.forEach((site) => {
-      const siteCity = (site.localisation.split(",")[0] || "").trim();
+      const siteCity = (site.localisation!.split(",")[0] || "").trim();
       if (filterCity !== "all" && siteCity !== filterCity) return;
       site.departements.forEach((d) => list.add(d.nom));
     });
@@ -632,7 +632,7 @@ function SiteMapCard({ site }: { site: Site }) {
 
   // Normalisation simple du libellé de ville → clé
   const cityKey = useMemo(() => {
-    const a = site.localisation.toLowerCase();
+    const a = site.localisation!.toLowerCase();
 
     if (a.includes("montréal") || a.includes("montreal")) return "montreal";
     if (a.includes("toronto")) return "toronto";
