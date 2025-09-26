@@ -51,4 +51,4 @@ Il permet de visualiser et gérer des sites, départements et machines avec :
 ## Lien de déploiement
 
 Le projet est déployé sur **Vercel** :
-👉 [https://neofactory.vercel.app](https://neofactory.vercel.app)
+👉 [https://intelligence-industrielle-hackaton.vercel.app/](https://intelligence-industrielle-hackaton.vercel.app)
