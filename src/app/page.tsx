@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import rawData from "@/data/factory.json";
 import type { Site, Machine } from "@/types/factory";
 import {
@@ -117,11 +117,107 @@ function useDarkMode() {
 export default function FactoryDashboard() {
   const [search, setSearch] = useState("");
   const [filterEtat, setFilterEtat] = useState<string>("all");
-  const [selected, setSelected] = useState<Machine | null>(null);
+
+  // NOUVEAU : filtres ville & département
+  const [filterCity, setFilterCity] = useState<string>("all");
+  const [filterDept, setFilterDept] = useState<string>("all");
+
+  // NOUVEAU : accordéons contrôlés (pour auto-ouvrir)
+  const [openSite, setOpenSite] = useState<string | undefined>(undefined);
+  const [openDepsBySite, setOpenDepsBySite] = useState<Record<number, string[]>>({});
+  
+  // Filtrage sites/départements selon ville/département (et on garde la recherche pour l’affichage table)
+  const filteredSites = useMemo(() => {
+    return factoryData
+      .filter((site) => {
+        const siteCity = (site.localisation.split(",")[0] || "").trim();
+        return filterCity === "all" || siteCity === filterCity;
+      })
+      .map((site) => ({
+        ...site,
+        departements: site.departements.filter((d) => filterDept === "all" || d.nom === filterDept),
+      }))
+      .filter((site) => site.departements.length > 0);
+  }, [filterCity, filterDept]);
+  // Suggestions de recherche
+  const [showSug, setShowSug] = useState(false);
+  const [activeIdx, setActiveIdx] = useState<number>(0);
+
+  // Liste aplatie des machines selon filtres Ville/Département/État
+  type FlatMachine = {
+    id: number;
+    nom: string;
+    etat: string;
+    siteId: number;
+    siteNom: string;
+    siteLoc: string;
+    depId: number;
+    depNom: string;
+    performance?: number;
+  };
+
+  const flatMachines = useMemo<FlatMachine[]>(() => {
+    const list: FlatMachine[] = [];
+    filteredSites.forEach((site) => {
+      site.departements.forEach((dep) => {
+        dep.machines.forEach((m) => {
+          if (filterEtat !== "all" && m.etat !== filterEtat) return;
+          list.push({
+            id: m.id,
+            nom: m.nom,
+            etat: m.etat,
+              siteId: site.id,
+              siteNom: site.nom,
+              siteLoc: site.localisation,
+              depId: dep.id,
+              depNom: dep.nom,
+              performance: (m as any).performance,
+          });
+        });
+      });
+    });
+    return list;
+  }, [filteredSites, filterEtat]);
+
+    // Suggestions en fonction du texte saisi
+    const suggestions = useMemo(() => {
+      const q = search.trim().toLowerCase();
+      if (!q) return [];
+      // match sur le nom (contient) + tri simple (nom commence par, puis contient)
+      const starts = flatMachines.filter((m) => m.nom.toLowerCase().startsWith(q));
+      const contains = flatMachines.filter(
+        (m) => !m.nom.toLowerCase().startsWith(q) && m.nom.toLowerCase().includes(q)
+      );
+      return [...starts, ...contains].slice(0, 8);
+    }, [search, flatMachines]);
+
+    // Quand on choisit une suggestion
+    const selectSuggestion = (fm: FlatMachine) => {
+      setSearch(fm.nom);
+      // ouvre site + département
+      setOpenSite(`site-${fm.siteId}`);
+      setOpenDepsBySite((prev) => ({
+        ...prev,
+        [fm.siteId]: Array.from(new Set([...(prev[fm.siteId] ?? []), `dep-${fm.depId}`])),
+      }));
+      // scroll vers la ligne
+      setTimeout(() => {
+        const el = machineRowRefs.current[fm.id];
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        el?.classList.add("ring-2", "ring-primary/60");
+        setTimeout(() => el?.classList.remove("ring-2", "ring-primary/60"), 1200);
+      }, 80);
+      setShowSug(false);
+      setActiveIdx(0);
+    };
+
+  // Références pour scroller jusqu’à la machine trouvée
+  const machineRowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
+
   const prefersReducedMotion = useReducedMotion();
   const { dark, toggle } = useDarkMode();
 
-  // Compteurs globaux (sites, départements, machines)
+  // Totaux simples
   const totals = useMemo(() => {
     const sites = factoryData.length;
     const departments = factoryData.reduce((a, b) => a + b.departements.length, 0);
@@ -132,13 +228,67 @@ export default function FactoryDashboard() {
     return { sites, departments, machines };
   }, []);
 
-  // Filtrage par recherche + état
+  // Options ville/département
+  const cityOptions = useMemo(() => {
+    const set = new Set<string>();
+    factoryData.forEach((s) => {
+      // clé ville simple = premier mot avant la virgule (ex: "Montréal")
+      const city = (s.localisation.split(",")[0] || "").trim();
+      if (city) set.add(city);
+    });
+    return Array.from(set).sort();
+  }, []);
+
+  const deptOptions = useMemo(() => {
+    const list = new Set<string>();
+    factoryData.forEach((site) => {
+      const siteCity = (site.localisation.split(",")[0] || "").trim();
+      if (filterCity !== "all" && siteCity !== filterCity) return;
+      site.departements.forEach((d) => list.add(d.nom));
+    });
+    return Array.from(list).sort();
+  }, [filterCity]);
+
+  // Filtrage machines (par nom + état)
   const filterMachines = (machines: Machine[]): Machine[] =>
     machines.filter((m) => {
       const matchesSearch = m.nom.toLowerCase().includes(search.toLowerCase());
       const matchesEtat = filterEtat === "all" || m.etat === filterEtat;
       return matchesSearch && matchesEtat;
     });
+
+
+  // NOUVEAU : ouverture auto du bon site/département + scroll lors d’une recherche
+  useEffect(() => {
+    if (!search.trim()) return;
+
+    // trouve la 1ère machine correspondant à la recherche et aux filtres ville/dept/etat
+    for (const site of filteredSites) {
+      for (const dep of site.departements) {
+        const match = dep.machines.find((m) =>
+          m.nom.toLowerCase().includes(search.toLowerCase()) &&
+          (filterEtat === "all" || m.etat === filterEtat)
+        );
+        if (match) {
+          // ouvre le site
+          setOpenSite(`site-${site.id}`);
+          // ouvre le département
+          setOpenDepsBySite((prev) => ({
+            ...prev,
+            [site.id]: Array.from(new Set([...(prev[site.id] ?? []), `dep-${dep.id}`])),
+          }));
+          // petit scroll vers la machine après le rendu
+          setTimeout(() => {
+            const el = machineRowRefs.current[match.id];
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+            el?.classList.add("ring-2", "ring-primary/60");
+            setTimeout(() => el?.classList.remove("ring-2", "ring-primary/60"), 1200);
+          }, 50);
+          return;
+        }
+      }
+    }
+  }, [search, filteredSites, filterEtat]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
@@ -149,24 +299,103 @@ export default function FactoryDashboard() {
             <Factory className="h-6 w-6 text-primary" aria-hidden="true" />
             <div>
               <h1 className="text-lg font-semibold leading-tight tracking-tight md:text-xl">NeoFactory</h1>
-              <p className="text-xs text-muted-foreground">Operational Dashboard</p>
+              <p className="text-xs text-muted-foreground">Tableau de bord opérationnel</p>
             </div>
           </div>
 
-          {/* Recherche + filtres + bouton thème */}
-          <div className="flex flex-1 items-center justify-end gap-3">
-            <div className="relative w-full max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                aria-label="Rechercher une machine"
-                placeholder="Rechercher une machine…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+          {/* Recherche + filtres */}
+          <div className="flex flex-1 items-center justify-end gap-3 flex-wrap">
+          <div className="relative w-full max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Rechercher une machine"
+              placeholder="Rechercher une machine…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setShowSug(true);
+                setActiveIdx(0);
+              }}
+              onFocus={() => search.trim() && setShowSug(true)}
+              onBlur={() => setTimeout(() => setShowSug(false), 120)} // laisse le temps au clic
+              onKeyDown={(e) => {
+                if (!suggestions.length) return;
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setActiveIdx((i) => (i + 1) % suggestions.length);
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setActiveIdx((i) => (i - 1 + suggestions.length) % suggestions.length);
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  selectSuggestion(suggestions[activeIdx]);
+                } else if (e.key === "Escape") {
+                  setShowSug(false);
+                }
+              }}
+              className="pl-9"
+            />
 
-            <Select onValueChange={(v) => setFilterEtat(v)} defaultValue="all">
+            {/* Liste de suggestions */}
+            {showSug && suggestions.length > 0 && (
+              <div className={"absolute z-30 mt-1 w-full " + FRAME + " bg-popover"}>
+                <ul className="max-h-72 overflow-auto py-1">
+                  {suggestions.map((fm, idx) => (
+                    <li key={fm.id}>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectSuggestion(fm)}
+                        className={[
+                          "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm",
+                          idx === activeIdx ? "bg-muted" : "hover:bg-muted/70",
+                        ].join(" ")}
+                      >
+                        <span className="truncate">
+                          <span className="font-medium">{fm.nom}</span>
+                          <span className="mx-2 text-muted-foreground">•</span>
+                          <span className="text-muted-foreground">{fm.depNom}</span>
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusBadge(fm.etat)}`}>
+                          {fm.siteNom}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+
+            {/* Filtre Ville */}
+            <Select onValueChange={setFilterCity} defaultValue="all" value={filterCity}>
+              <SelectTrigger className={FRAME + " w-[160px]"}>
+                <SelectValue placeholder="Ville" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">Toutes les villes</SelectItem>
+                {cityOptions.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Filtre Département (dépend de la ville) */}
+            <Select onValueChange={setFilterDept} defaultValue="all" value={filterDept}>
+              <SelectTrigger className={FRAME + " w-[180px]"}>
+                <SelectValue placeholder="Département" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">Tous les départements</SelectItem>
+                {deptOptions.map((d) => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Filtre État (existant) */}
+            <Select onValueChange={setFilterEtat} defaultValue={filterEtat} value={filterEtat}>
               <SelectTrigger className={FRAME + " w-[170px]"}>
                 <SelectValue placeholder="Filtrer par état" />
               </SelectTrigger>
@@ -186,13 +415,12 @@ export default function FactoryDashboard() {
               title={dark ? "Mode clair" : "Mode sombre"}
             >
               {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              <span className="hidden sm:inline">{dark ? "Light" : "Dark"}</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Cartes de stats + légende */}
+      {/* KPIs + Légende */}
       <section className="mx-auto w-full max-w-7xl px-6 py-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
           {[{ label: "Sites", value: totals.sites, Icon: Building2 }, { label: "Départements", value: totals.departments, Icon: Activity }, { label: "Machines", value: totals.machines, Icon: Cog }].map(({ label, value, Icon }) => (
@@ -207,7 +435,6 @@ export default function FactoryDashboard() {
             </Card>
           ))}
 
-          {/* Légende états */}
           <Card className={PANEL}>
             <CardHeader className="space-y-1 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">État des machines</CardTitle>
@@ -221,175 +448,164 @@ export default function FactoryDashboard() {
         </div>
       </section>
 
-      {/* Sites + départements + machines */}
+      {/* Sites → Départements → Machines */}
       <main className="mx-auto max-w-7xl px-6 pb-12">
-        <Accordion type="single" collapsible className="space-y-3">
-  {factoryData.map((site) => (
-    <AccordionItem
-      key={site.id}
-      value={`site-${site.id}`}
-      className={PANEL}
-    >
-      {/* Niveau Site */}
-      <AccordionTrigger className="px-4 py-3 text-left">
-        <div className="flex w-full items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="truncate text-base font-semibold leading-tight">
-              {site.nom}
-            </p>
-            <p className="truncate text-xs text-muted-foreground flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5" /> {site.localisation}
-            </p>
-          </div>
-          <div className="hidden items-center gap-2 sm:flex">
-            <Badge variant="secondary" className="rounded-full">
-              {site.departements.length} départements
-            </Badge>
-          </div>
-        </div>
-      </AccordionTrigger>
+        <Accordion
+          type="single"
+          collapsible
+          className="space-y-3"
+          value={openSite}
+          onValueChange={(v) => setOpenSite(v || undefined)}
+        >
+          {filteredSites.map((site) => (
+            <AccordionItem key={site.id} value={`site-${site.id}`} className={PANEL}>
+              <AccordionTrigger className="px-4 py-3 text-left">
+                <div className="flex w-full items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold leading-tight">{site.nom}</p>
+                    <p className="truncate text-xs text-muted-foreground flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" /> {site.localisation}
+                    </p>
+                  </div>
+                  <div className="hidden items-center gap-2 sm:flex">
+                    <Badge variant="secondary" className="rounded-full">{site.departements.length} départements</Badge>
+                  </div>
+                </div>
+              </AccordionTrigger>
 
-      <AccordionContent className="px-4 pb-4">
-        {/* Vue site : carte + départements */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-          <div className="md:col-span-2">
-            <SiteMapCard site={site} />
-          </div>
+              <AccordionContent className="px-4 pb-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                  <div className="md:col-span-2">
+                    <SiteMapCard site={site} />
+                  </div>
 
-          <div className="md:col-span-3 space-y-4">
-            {/* Accordion des départements */}
-            <Accordion type="multiple" collapsible className="space-y-2">
-              {site.departements.map((dep) => (
-                <AccordionItem
-                  key={dep.id}
-                  value={`dep-${dep.id}`}
-                  className={FRAME}
-                >
-                  {/* Niveau Département */}
-                  <AccordionTrigger className="px-3 py-2 text-left">
-                    <div className="flex w-full items-center justify-between gap-2">
-                      <span className="text-sm font-semibold">{dep.nom}</span>
-                      <Badge variant="outline" className="rounded-full">
-                        {dep.machines.length} machines
-                      </Badge>
-                    </div>
-                  </AccordionTrigger>
-
-                  <AccordionContent className="px-3 pb-3">
-                    {/* Machines (table + version mobile) */}
-                    <div className="hidden md:block">
-                      <div className={"overflow-hidden " + FRAME}>
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted text-muted-foreground">
-                            <tr>
-                              <th className="px-3 py-2 text-left font-medium">Machine</th>
-                              <th className="px-3 py-2 text-left font-medium">ID</th>
-                              <th className="px-3 py-2 text-left font-medium">État</th>
-                              <th className="px-3 py-2 text-left font-medium">Performance</th>
-                              <th className="px-3 py-2 text-left font-medium">Uptime</th>
-                              <th className="px-3 py-2 text-left font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border bg-background">
-                            {filterMachines(dep.machines).map((m) => {
-                              const rng = random.int(1, 9);
-                              const perf = m.performance
-                              const uptime =
-                              m.etat === "Hors service"
-                                ? 0
-                                : m.etat === "En maintenance"
-                                ? 50 + rng
-                                : 90 + rng;
-                              return (
-                                <tr key={m.id} className="align-middle">
-                                  <td className="px-3 py-2">{m.nom}</td>
-                                  <td className="px-3 py-2 tabular-nums text-muted-foreground">
-                                    {m.id}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <Badge className={`rounded-full ${statusBadge(m.etat)}`}>
-                                      {m.etat}
-                                    </Badge>
-                                  </td>
-                                  <td className="px-3 py-2 w-[220px]">
-                                    <div className="flex items-center gap-2">
-                                      <Progress
-                                        value={perf}
-                                        className="h-2"
-                                        aria-label={`Performance ${perf}%`}
-                                      />
-                                      <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">
-                                        {perf}%
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td className="px-3 py-2 w-[140px] tabular-nums">
-                                    {uptime}%
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <MachineDialog m={m} onOpen={() => setSelected(m)} />
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* Version mobile */}
-                    <div className="grid gap-3 md:hidden">
-                      {filterMachines(dep.machines).map((m) => {
-                        const rng = makeRng(m.id);
-                        const perf = 70 + Math.round(rng() * 30);
-                        const uptime = 90 + Math.round(rng() * 10);
-                        return (
-                          <div key={m.id} className={FRAME + " p-3"}>
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="font-medium leading-tight">{m.nom}</p>
-                                <p className="text-xs text-muted-foreground">ID: {m.id}</p>
-                              </div>
-                              <Badge className={`rounded-full ${statusBadge(m.etat)}`}>
-                                {m.etat}
+                  <div className="md:col-span-3 space-y-4">
+                    <Accordion
+                      type="multiple"
+                      className="space-y-2"
+                      value={openDepsBySite[site.id] ?? []}
+                      onValueChange={(vals) =>
+                        setOpenDepsBySite((prev) => ({ ...prev, [site.id]: vals as string[] }))
+                      }
+                    >
+                      {site.departements.map((dep) => (
+                        <AccordionItem key={dep.id} value={`dep-${dep.id}`} className={FRAME}>
+                          <AccordionTrigger className="px-3 py-2 text-left">
+                            <div className="flex w-full items-center justify-between gap-2">
+                              <span className="text-sm font-semibold">{dep.nom}</span>
+                              <Badge variant="outline" className="rounded-full">
+                                {dep.machines.length} machines
                               </Badge>
                             </div>
-                            <div className="mt-3 grid grid-cols-2 gap-3">
-                              <div>
-                                <p className="text-xs text-muted-foreground">Performance</p>
-                                <div className="mt-1 flex items-center gap-2">
-                                  <Progress value={perf} className="h-2" />
-                                  <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">
-                                    {perf}%
-                                  </span>
-                                </div>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Uptime</p>
-                                <p className="mt-1 tabular-nums">{uptime}%</p>
-                              </div>
-                            </div>
-                            <div className="mt-3">
-                              <MachineDialog m={m} onOpen={() => setSelected(m)} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </div>
-        </div>
-      </AccordionContent>
-    </AccordionItem>
-  ))}
-</Accordion>
+                          </AccordionTrigger>
 
+                          <AccordionContent className="px-3 pb-3">
+                            {/* Desktop table */}
+                            <div className="hidden md:block">
+                              <div className={"overflow-hidden " + FRAME}>
+                                <table className="w-full text-sm">
+                                  <thead className="bg-muted text-muted-foreground">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left font-medium">Machine</th>
+                                      <th className="px-3 py-2 text-left font-medium">ID</th>
+                                      <th className="px-3 py-2 text-left font-medium">État</th>
+                                      <th className="px-3 py-2 text-left font-medium">Performance</th>
+                                      <th className="px-3 py-2 text-left font-medium">Uptime</th>
+                                      <th className="px-3 py-2 text-left font-medium">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border bg-background">
+                                    {filterMachines(dep.machines).map((m) => {
+                                      const rng = makeRng(m.id);
+                                      const perf = m.performance ?? 70 + Math.round(rng() * 30);
+                                      const up =
+                                        m.etat === "Hors service"
+                                          ? 0
+                                          : m.etat === "En maintenance"
+                                          ? 55 + Math.round(rng() * 10)
+                                          : 90 + Math.round(rng() * 10);
+                                      return (
+                                        <tr
+                                          key={m.id}
+                                          ref={(el) => (machineRowRefs.current[m.id] = el)}
+                                          className="align-middle"
+                                        >
+                                          <td className="px-3 py-2">{m.nom}</td>
+                                          <td className="px-3 py-2 tabular-nums text-muted-foreground">{m.id}</td>
+                                          <td className="px-3 py-2">
+                                            <Badge className={`rounded-full ${statusBadge(m.etat)}`}>{m.etat}</Badge>
+                                          </td>
+                                          <td className="px-3 py-2 w-[220px]">
+                                            <div className="flex items-center gap-2">
+                                              <Progress value={perf} className="h-2" aria-label={`Performance ${perf}%`} />
+                                              <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">{perf}%</span>
+                                            </div>
+                                          </td>
+                                          <td className="px-3 py-2 w-[140px] tabular-nums">{up}%</td>
+                                          <td className="px-3 py-2">
+                                            <MachineDialog m={m} onOpen={() => {}} />
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+
+                            {/* Mobile cards */}
+                            <div className="grid gap-3 md:hidden">
+                              {filterMachines(dep.machines).map((m) => {
+                                const rng = makeRng(m.id);
+                                const perf = m.performance ?? 70 + Math.round(rng() * 30);
+                                const up =
+                                  m.etat === "Hors service"
+                                    ? 0
+                                    : m.etat === "En maintenance"
+                                    ? 55 + Math.round(rng() * 10)
+                                    : 90 + Math.round(rng() * 10);
+                                return (
+                                  <div key={m.id} className={FRAME + " p-3"}>
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="font-medium leading-tight">{m.nom}</p>
+                                        <p className="text-xs text-muted-foreground">ID: {m.id}</p>
+                                      </div>
+                                      <Badge className={`rounded-full ${statusBadge(m.etat)}`}>{m.etat}</Badge>
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-2 gap-3">
+                                      <div>
+                                        <p className="text-xs text-muted-foreground">Performance</p>
+                                        <div className="mt-1 flex items-center gap-2">
+                                          <Progress value={perf} className="h-2" />
+                                          <span className="w-10 text-right tabular-nums text-xs text-muted-foreground">{perf}%</span>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-muted-foreground">Uptime</p>
+                                        <p className="mt-1 tabular-nums">{up}%</p>
+                                      </div>
+                                    </div>
+                                    <div className="mt-3">
+                                      <MachineDialog m={m} onOpen={() => {}} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       </main>
 
-      {/* Animation légère à l’apparition */}
+      {/* Animation légère */}
       {!prefersReducedMotion && (
         <motion.div aria-hidden initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} />
       )}
