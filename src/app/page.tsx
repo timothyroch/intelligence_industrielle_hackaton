@@ -527,7 +527,7 @@ export default function FactoryDashboard() {
                                       return (
                                         <tr
                                           key={m.id}
-                                          ref={(el) => (machineRowRefs.current[m.id] = el)}
+                                          ref={(el) => {(machineRowRefs.current[m.id] = el)}}
                                           className="align-middle"
                                         >
                                           <td className="px-3 py-2">{m.nom}</td>
@@ -890,7 +890,7 @@ const piecesParHeure =
                     <CardTitle className="text-sm text-muted-foreground">Performance</CardTitle>
                   </CardHeader>
                   <CardContent className="flex justify-center">
-                    <Gauge label="Taux" value={performance} />
+                    <Gauge label="Taux" value={performance ?? 0} />
                   </CardContent>
                 </Card>
 
