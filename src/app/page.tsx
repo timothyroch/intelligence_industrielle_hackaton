@@ -171,7 +171,7 @@ export default function FactoryDashboard() {
               siteLoc: site.localisation,
               depId: dep.id,
               depNom: dep.nom,
-              performance: (m as any).performance,
+              performance: m.performance,
           });
         });
       });
